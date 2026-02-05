@@ -12,13 +12,13 @@ from typing import Any, List
 import numpy as np
 import pytest
 
+from pto_test.core import environment
 from pto_test.core.test_case import DataType, PTOTestCase, TensorSpec
 
 # Add pypto to path
-_FRAMEWORK_ROOT = Path(__file__).parent.parent.parent
-_PYPTO_ROOT = _FRAMEWORK_ROOT / "3rdparty" / "pypto" / "python"
-if _PYPTO_ROOT.exists() and str(_PYPTO_ROOT) not in sys.path:
-    sys.path.insert(0, str(_PYPTO_ROOT))
+_PYPTO_PYTHON = environment.get_pypto_python_path()
+if _PYPTO_PYTHON is not None and _PYPTO_PYTHON.exists() and str(_PYPTO_PYTHON) not in sys.path:
+    sys.path.insert(0, str(_PYPTO_PYTHON))
 
 
 class TestTileAdd(PTOTestCase):
@@ -97,20 +97,20 @@ class TestTileMul(PTOTestCase):
 
     def define_tensors(self) -> List[TensorSpec]:
         return [
-            # 方式1: 使用 Callable 生成随机数据（每次运行不同）
+            # Method 1: Use Callable to generate random data (different on each run)
             TensorSpec(
                 "a",
                 [self.rows, self.cols],
                 DataType.FP32,
                 init_value=lambda shape: np.random.randn(*shape),
             ),
-            # 方式2: 使用标量值（推荐 - 简单且可序列化）
+            # Method 2: Use scalar value (recommended - simple and serializable)
             TensorSpec("b", [self.rows, self.cols], DataType.FP32, init_value=3.0),
-            # 其他方式见 TestCustomArrayInit 类的示例：
-            # - 小数组可以直接用 np.array([[...]])
-            # - 单位矩阵用 np.eye(n)
-            # - 对角矩阵用 np.diag([...])
-            # 输出张量: 自动零初始化
+            # For other methods, see TestCustomArrayInit class examples:
+            # - Small arrays can use np.array([[...]])
+            # - Identity matrix: np.eye(n)
+            # - Diagonal matrix: np.diag([...])
+            # Output tensor: automatically zero-initialized
             TensorSpec("c", [self.rows, self.cols], DataType.FP32, is_output=True),
         ]
 
@@ -168,31 +168,31 @@ class TestCustomArrayInit(PTOTestCase):
 
     def define_tensors(self) -> List[TensorSpec]:
         return [
-            # 小数组: 自定义值（会被序列化）
+            # Small array: custom values (will be serialized)
             TensorSpec(
                 "small",
                 [3, 3],
                 DataType.FP32,
                 init_value=np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]], dtype=np.float32),
             ),
-            # 单位矩阵
+            # Identity matrix
             TensorSpec("identity", [4, 4], DataType.FP32, init_value=np.eye(4, dtype=np.float32)),
-            # 常数数组（会被优化为 np.full）
+            # Constant array (optimized to np.full)
             TensorSpec("constant", [5, 5], DataType.FP32, init_value=np.ones((5, 5)) * 3.14),
-            # 对角矩阵（小数组会序列化）
+            # Diagonal matrix (small arrays will be serialized)
             TensorSpec(
                 "diagonal", [3, 3], DataType.FP32, init_value=np.diag([1, 2, 3]).astype(np.float32)
             ),
-            # 输出
+            # Output
             TensorSpec("out", [3, 3], DataType.FP32, is_output=True),
         ]
 
     def get_program(self) -> Any:
-        # Placeholder - 这个测试只是为了演示数组初始化
+        # Placeholder - this test is just for demonstrating array initialization
         return None
 
     def compute_expected(self, tensors, params=None):
-        # 简单示例: 将 small 数组复制到输出
+        # Simple example: copy small array to output
         tensors["out"][:] = tensors["small"][:3, :3]
 
 

@@ -3,6 +3,9 @@ build/
 cmake-build-*/
 out/
 
+# Dependencies (now managed via environment variables)
+3rdparty/
+
 # Compiled objects
 *.o
 *.obj
@@ -21,6 +24,7 @@ out/
 # IDE / Editor
 .vscode/
 .claude/
+.cursor/
 .idea/
 *.swp
 *.swo

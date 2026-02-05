@@ -29,16 +29,15 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-# Add required paths
-_SCRIPT_DIR = Path(__file__).parent
-_FRAMEWORK_ROOT = _SCRIPT_DIR.parent.parent.parent
-_PYPTO_ROOT = _FRAMEWORK_ROOT / "3rdparty" / "pypto" / "python"
-_SIMPLER_ROOT = _FRAMEWORK_ROOT / "3rdparty" / "simpler"
-_SIMPLER_PYTHON = _SIMPLER_ROOT / "python"
-_SIMPLER_SCRIPTS = _SIMPLER_ROOT / "examples" / "scripts"
+# Add required paths using environment module
+from pto_test.core import environment
 
-for path in [_PYPTO_ROOT, _SIMPLER_PYTHON, _SIMPLER_SCRIPTS]:
-    if path.exists() and str(path) not in sys.path:
+_PYPTO_PYTHON = environment.get_pypto_python_path()
+_SIMPLER_PYTHON = environment.get_simpler_python_path()
+_SIMPLER_SCRIPTS = environment.get_simpler_scripts_path()
+
+for path in [_PYPTO_PYTHON, _SIMPLER_PYTHON, _SIMPLER_SCRIPTS]:
+    if path is not None and path.exists() and str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
 

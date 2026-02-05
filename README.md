@@ -6,26 +6,30 @@ A general-purpose integration testing framework designed to perform fuzz testing
 
 ### Clone the Repository
 
-This repository uses git submodules. Clone with the `--recursive` flag to fetch all dependencies:
+Clone the repository:
 
 ```bash
-git clone --recursive https://github.com/<your-org>/pto-testing-framework.git
-```
-
-If you have already cloned the repository without `--recursive`, run:
-
-```bash
-git submodule update --init --recursive
+git clone https://github.com/<your-org>/pto-testing-framework.git
+cd pto-testing-framework
 ```
 
 ### Build and Installation
 
-The framework provides a build script that compiles PyPTO and automatically configures your environment:
+The framework provides an intelligent build script that **automatically detects** available dependencies and builds what it finds:
 
 ```bash
-# Basic build (RelWithDebInfo by default)
+# Simple build - automatically detects and builds all available components
 ./build_and_install.sh
 
+# The script will:
+# 1. Check for PyPTO (environment variable, 3rdparty/, pip install, or clone from GitHub)
+# 2. Check for Simpler (same detection priority)
+# 3. Build whatever is available
+```
+
+**Common Build Options:**
+
+```bash
 # Clean build from scratch
 ./build_and_install.sh --clean
 
@@ -43,18 +47,78 @@ The framework provides a build script that compiles PyPTO and automatically conf
 ```
 
 **Build Script Options:**
+
+**Build Configuration:**
 - `-t, --type TYPE` — Build type: Debug, Release, RelWithDebInfo (default: RelWithDebInfo)
 - `-c, --clean` — Clean build directory before building
 - `-i, --install` — Install pto-test package in editable mode
 - `-j, --jobs N` — Number of parallel jobs (default: auto-detect)
+
+**Dependency Configuration:**
+- `--pypto-repo URL` — PyPTO repository URL (default: https://github.com/hw-native-sys/pypto)
+- `--simpler-repo URL` — Simpler repository URL (default: https://github.com/ChaoWao/simpler)
+- `--pypto-branch NAME` — PyPTO branch/tag (default: main)
+- `--simpler-branch NAME` — Simpler branch/tag (default: main)
+
+**Other:**
 - `-h, --help` — Show help message
 
-After building, the environment is **automatically configured**. The script generates and sources `build/setup_env.sh`, setting up `PYTHONPATH` and other variables.
+After building, the environment is **automatically configured**. The script generates and sources `build/setup_env.sh`, setting up all required environment variables.
 
 For new terminal sessions, source the environment:
 
 ```bash
 source build/setup_env.sh
+```
+
+### Dependency Auto-Detection
+
+The build script automatically detects dependencies in the following priority order:
+
+**Detection Priority:**
+1. Environment variables (`PYPTO_ROOT`, `SIMPLER_ROOT`)
+2. Existing `3rdparty/pypto` and `3rdparty/simpler` directories
+3. pip editable install (automatically detected)
+4. Auto-clone from GitHub (if not found)
+
+**Using Existing Dependencies:**
+
+```bash
+# Method 1: Set environment variables before building
+export PYPTO_ROOT=/path/to/your/pypto
+export SIMPLER_ROOT=/path/to/your/simpler
+./build_and_install.sh
+
+# Method 2: Use pip editable install (auto-detected)
+cd /path/to/pypto && pip install -e .
+cd /path/to/simpler && pip install -e .
+cd /path/to/pto-testing-framework
+./build_and_install.sh
+
+# Method 3: Place dependencies in 3rdparty/ (auto-detected)
+# Just put pypto and simpler in 3rdparty/ directory
+./build_and_install.sh
+```
+
+**What Gets Built:**
+
+The script will show you what it detected:
+```
+Detecting Dependencies
+========================================
+
+Checking for PyPTO...
+✓ PyPTO found (environment variable)
+  → PyPTO will be built
+
+Checking for Simpler...
+✓ Simpler found (3rdparty directory)
+  → Simpler will be built
+
+Build Plan:
+  • Framework:       ✓ (always)
+  • PyPTO:           ✓ (detected)
+  • Simpler:         ✓ (detected)
 ```
 
 ## Architecture
@@ -64,10 +128,10 @@ The framework serves as an integration layer that decouples frontends and backen
 ### Components
 
 **Frontend:**
-- [pypto](https://github.com/hw-native-sys/pypto) — Python DSL for tensor programming, located at `3rdparty/pypto`
+- [pypto](https://github.com/hw-native-sys/pypto) — Python DSL for tensor programming
 
 **Backend:**
-- [simpler](https://github.com/ChaoWao/simpler) — Runtime execution engine, located at `3rdparty/simpler`
+- [simpler](https://github.com/ChaoWao/simpler) — Runtime execution engine
 
 **Testing Framework (pto-test):**
 The framework bridges frontend and backend through three core modules:
@@ -115,9 +179,9 @@ pto-testing-framework/
 │   ├── conftest.py         # pytest configuration and fixtures
 │   └── test_cases/         # Actual test implementations
 │       └── test_elementwise.py
-├── 3rdparty/               # Git submodules
-│   ├── pypto/              # PyPTO frontend
-│   └── simpler/            # Simpler runtime backend
+├── 3rdparty/               # Dependencies (auto-managed, in .gitignore)
+│   ├── pypto/              # PyPTO frontend (if auto-cloned)
+│   └── simpler/            # Simpler runtime backend (if auto-cloned)
 ├── build/                  # Build artifacts (generated)
 │   ├── pypto/              # PyPTO build output
 │   ├── setup_env.sh        # Auto-generated environment setup
@@ -432,7 +496,7 @@ runner.run_completed_test(
 
 ## Environment Setup
 
-The `build_and_install.sh` script automatically configures your environment. For new terminal sessions or manual setup:
+The `build_and_install.sh` script automatically configures your environment. For new terminal sessions:
 
 ```bash
 # Source the auto-generated environment script
@@ -440,27 +504,34 @@ source build/setup_env.sh
 ```
 
 This sets up:
-- `PYTHONPATH` — Includes PyPTO, Simpler, and pto-test packages
-- `PYPTO_DIR` — Path to PyPTO source
-- `SIMPLER_DIR` — Path to Simpler source
+- `FRAMEWORK_ROOT` — Testing framework root directory
+- `PYPTO_ROOT` — Path to PyPTO installation (if used)
+- `SIMPLER_ROOT` — Path to Simpler installation (if used)
+- `PYTHONPATH` — Includes all required Python packages
 
 **Verify your setup:**
 
 ```bash
 # Check environment variables
-echo $PYTHONPATH
-echo $PYPTO_DIR
+echo $FRAMEWORK_ROOT
+echo $PYPTO_ROOT
+echo $SIMPLER_ROOT
 
 # Test imports
 python -c "import pypto; print(f'PyPTO version: {pypto.__version__}')"
-python -c "import simpler; print('Simpler imported successfully')"
+python -c "import pto_compiler; print('Simpler imported successfully')"
 python -c "import pto_test; print('pto-test imported successfully')"
 ```
 
-**Manual PYTHONPATH (if needed):**
+**Manual Environment Setup (advanced):**
+
+If you need fine-grained control, set these environment variables before running tests:
 
 ```bash
-export PYTHONPATH="${PWD}/3rdparty/pypto/python:${PWD}/3rdparty/simpler/python:${PWD}/src:${PYTHONPATH}"
+export FRAMEWORK_ROOT=/path/to/pto-testing-framework
+export PYPTO_ROOT=/path/to/pypto
+export SIMPLER_ROOT=/path/to/simpler
+export PYTHONPATH="$PYPTO_ROOT/python:$SIMPLER_ROOT/python:$FRAMEWORK_ROOT/src:$PYTHONPATH"
 ```
 
 ## Test Flow
@@ -506,13 +577,19 @@ export PYTHONPATH="${PWD}/3rdparty/pypto/python:${PWD}/3rdparty/simpler/python:$
 
 ## Troubleshooting
 
-### Submodules Not Initialized
+### Dependencies Not Found
 
-**Problem:** `ModuleNotFoundError` for `pypto` or `simpler`, or empty `3rdparty/` directories.
+**Problem:** `ModuleNotFoundError` for `pypto` or `simpler`.
 
 **Solution:**
 ```bash
-git submodule update --init --recursive
+# Option 1: Rebuild (will auto-detect and clone dependencies if needed)
+./build_and_install.sh --clean
+
+# Option 2: Set environment variables to existing installations
+export PYPTO_ROOT=/path/to/pypto
+export SIMPLER_ROOT=/path/to/simpler
+source build/setup_env.sh
 ```
 
 ### Import Errors After Build

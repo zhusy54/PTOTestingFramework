@@ -1,6 +1,0 @@
-[submodule "3rdparty/pypto"]
-	path = 3rdparty/pypto
-	url = https://github.com/hw-native-sys/pypto
-[submodule "3rdparty/simpler"]
-	path = 3rdparty/simpler
-	url = https://github.com/ChaoWao/simpler

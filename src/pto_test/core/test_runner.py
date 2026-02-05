@@ -18,17 +18,16 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional
 
+from pto_test.core import environment
 from pto_test.core.test_case import PTOTestCase, TestConfig, TestResult
 
 # Add pypto and simpler to path
-_FRAMEWORK_ROOT = Path(__file__).parent.parent.parent.parent
-_PYPTO_ROOT = _FRAMEWORK_ROOT / "3rdparty" / "pypto" / "python"
-_SIMPLER_ROOT = _FRAMEWORK_ROOT / "3rdparty" / "simpler"
-_SIMPLER_PYTHON = _SIMPLER_ROOT / "python"
-_SIMPLER_SCRIPTS = _SIMPLER_ROOT / "examples" / "scripts"
+_PYPTO_PYTHON = environment.get_pypto_python_path()
+_SIMPLER_PYTHON = environment.get_simpler_python_path()
+_SIMPLER_SCRIPTS = environment.get_simpler_scripts_path()
 
-for path in [_PYPTO_ROOT, _SIMPLER_PYTHON, _SIMPLER_SCRIPTS]:
-    if path.exists() and str(path) not in sys.path:
+for path in [_PYPTO_PYTHON, _SIMPLER_PYTHON, _SIMPLER_SCRIPTS]:
+    if path is not None and path.exists() and str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
 # Session-level output directory (shared across all tests in a pytest session)
@@ -44,7 +43,8 @@ def _get_session_output_dir() -> Path:
     global _SESSION_OUTPUT_DIR
     if _SESSION_OUTPUT_DIR is None:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_base = _FRAMEWORK_ROOT / "build" / "outputs"
+        framework_root = environment.get_framework_root()
+        output_base = framework_root / "build" / "outputs"
         _SESSION_OUTPUT_DIR = output_base / f"output_{timestamp}"
         _SESSION_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     return _SESSION_OUTPUT_DIR

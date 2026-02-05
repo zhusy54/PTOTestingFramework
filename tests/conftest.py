@@ -7,16 +7,22 @@ from pathlib import Path
 
 import pytest
 
-# Add src and 3rdparty paths
+# Add framework src path first
 _FRAMEWORK_ROOT = Path(__file__).parent.parent
 _SRC_PATH = _FRAMEWORK_ROOT / "src"
-_PYPTO_ROOT = _FRAMEWORK_ROOT / "3rdparty" / "pypto" / "python"
-_SIMPLER_ROOT = _FRAMEWORK_ROOT / "3rdparty" / "simpler"
-_SIMPLER_PYTHON = _SIMPLER_ROOT / "python"
-_SIMPLER_SCRIPTS = _SIMPLER_ROOT / "examples" / "scripts"
+if _SRC_PATH.exists() and str(_SRC_PATH) not in sys.path:
+    sys.path.insert(0, str(_SRC_PATH))
 
-for path in [_SRC_PATH, _PYPTO_ROOT, _SIMPLER_PYTHON, _SIMPLER_SCRIPTS]:
-    if path.exists() and str(path) not in sys.path:
+# Import environment module for path resolution
+from pto_test.core import environment
+
+# Add dependency paths using environment module
+_PYPTO_PYTHON = environment.get_pypto_python_path()
+_SIMPLER_PYTHON = environment.get_simpler_python_path()
+_SIMPLER_SCRIPTS = environment.get_simpler_scripts_path()
+
+for path in [_PYPTO_PYTHON, _SIMPLER_PYTHON, _SIMPLER_SCRIPTS]:
+    if path is not None and path.exists() and str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
 from pto_test.core.test_case import TestConfig

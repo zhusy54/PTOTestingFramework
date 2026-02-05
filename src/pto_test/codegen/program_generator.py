@@ -11,11 +11,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, Optional
 
 # Add pypto to path
-_FRAMEWORK_ROOT = Path(__file__).parent.parent.parent.parent
-_PYPTO_ROOT = _FRAMEWORK_ROOT / "3rdparty" / "pypto" / "python"
+from pto_test.core import environment
 
-if _PYPTO_ROOT.exists() and str(_PYPTO_ROOT) not in sys.path:
-    sys.path.insert(0, str(_PYPTO_ROOT))
+_PYPTO_PYTHON = environment.get_pypto_python_path()
+if _PYPTO_PYTHON is not None and _PYPTO_PYTHON.exists() and str(_PYPTO_PYTHON) not in sys.path:
+    sys.path.insert(0, str(_PYPTO_PYTHON))
 
 if TYPE_CHECKING:
     from pypto.ir.pass_manager import OptimizationStrategy

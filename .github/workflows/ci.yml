@@ -11,6 +11,8 @@ jobs:
   test:
     name: Test on ${{ matrix.os }} - Python ${{ matrix.python-version }}
     runs-on: ${{ matrix.os }}
+    # Only run on the original repository, not on forks
+    if: github.repository == 'luohuan19/PTOTestingFramework'
 
     strategy:
       fail-fast: false
@@ -19,49 +21,10 @@ jobs:
         python-version: ['3.10']  # TODO: Re-enable 3.11 after fixing PyPTO TensorType API compatibility
 
     steps:
-      - name: Checkout (PR merge ref) without submodules
-        if: ${{ github.event_name == 'pull_request' }}
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: refs/pull/${{ github.event.pull_request.number }}/merge
           fetch-depth: 0
-
-      - name: Checkout repository with submodules
-        if: ${{ github.event_name != 'pull_request' }}
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-          fetch-depth: 0
-
-      - name: Force submodule pointers to latest base branch
-        if: ${{ github.event_name == 'pull_request' }}
-        run: |
-          set -euo pipefail
-      
-          BASE_REF="${{ github.base_ref }}"   # main or develop
-      
-          # Fetch the latest base branch head from origin
-          git fetch origin "${BASE_REF}" --prune --no-tags --depth=1
-          BASE_SHA="$(git rev-parse "origin/${BASE_REF}")"
-          echo "Using latest base: origin/${BASE_REF} @ ${BASE_SHA}"
-      
-          # Use the base branch's .gitmodules (prevents PR from changing URLs/paths)
-          git checkout "$BASE_SHA" -- .gitmodules || true
-          git submodule sync --recursive || true
-      
-          # Reset each submodule gitlink to the commit recorded on the base branch
-          git config -f .gitmodules --get-regexp '^submodule\..*\.path$' | awk '{print $2}' | while read -r p; do
-            [ -n "$p" ] || continue
-            echo "Forcing submodule pointer for $p to base"
-            git checkout "$BASE_SHA" -- "$p" || true
-          done
-
-      - name: Update submodules (use base pointers)
-        run: |
-          set -euo pipefail
-          git submodule sync --recursive
-          git submodule update --init --force --recursive
-          git submodule status --recursive
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
@@ -91,23 +54,116 @@ jobs:
           key: ${{ matrix.os }}-${{ matrix.python-version }}
           max-size: 500M
 
-      - name: Build PyPTO and dependencies
+      - name: Cache dependencies
+        id: cache-deps
+        uses: actions/cache@v4
+        with:
+          path: |
+            3rdparty/
+            build/pypto/
+          key: deps-${{ runner.os }}-${{ hashFiles('build_and_install.sh', '.github/workflows/ci.yml') }}-v2
+          restore-keys: |
+            deps-${{ runner.os }}-${{ hashFiles('build_and_install.sh', '.github/workflows/ci.yml') }}-
+            deps-${{ runner.os }}-
+
+      - name: Check for dependency updates
+        if: steps.cache-deps.outputs.cache-hit == 'true'
+        run: |
+          echo "=== Checking for dependency updates ==="
+          FORCE_REBUILD=false
+          
+          # Check for corrupted cache structures
+          if [ -d "3rdparty/pypto" ] && [ ! -d "3rdparty/pypto/python" ]; then
+            echo "⚠️  PyPTO cache corrupted (missing python/), cleaning..."
+            rm -rf 3rdparty/pypto
+            FORCE_REBUILD=true
+          fi
+          
+          if [ -d "3rdparty/simpler" ] && [ ! -d "3rdparty/simpler/python" ]; then
+            echo "⚠️  Simpler cache corrupted (missing python/), cleaning..."
+            rm -rf 3rdparty/simpler
+            FORCE_REBUILD=true
+          fi
+          
+          # Check PyPTO updates
+          if [ -d "3rdparty/pypto/.git" ]; then
+            cd 3rdparty/pypto
+            CURRENT_COMMIT=$(git rev-parse HEAD)
+            git fetch origin main --depth=1
+            LATEST_COMMIT=$(git rev-parse origin/main)
+            if [ "$CURRENT_COMMIT" != "$LATEST_COMMIT" ]; then
+              echo "⚠️  PyPTO has updates: $CURRENT_COMMIT -> $LATEST_COMMIT"
+              FORCE_REBUILD=true
+            else
+              echo "✓ PyPTO is up-to-date: $CURRENT_COMMIT"
+            fi
+            cd ../..
+          fi
+          
+          # Check Simpler updates
+          if [ -d "3rdparty/simpler/.git" ]; then
+            cd 3rdparty/simpler
+            CURRENT_COMMIT=$(git rev-parse HEAD)
+            git fetch origin main --depth=1
+            LATEST_COMMIT=$(git rev-parse origin/main)
+            if [ "$CURRENT_COMMIT" != "$LATEST_COMMIT" ]; then
+              echo "⚠️  Simpler has updates: $CURRENT_COMMIT -> $LATEST_COMMIT"
+              FORCE_REBUILD=true
+            else
+              echo "✓ Simpler is up-to-date: $CURRENT_COMMIT"
+            fi
+            cd ../..
+          fi
+          
+          # Force rebuild if updates detected
+          if [ "$FORCE_REBUILD" = true ]; then
+            echo "🔄 Dependency updates detected - forcing rebuild"
+            rm -rf 3rdparty/ build/pypto/
+          else
+            echo "✅ All dependencies are up-to-date"
+          fi
+
+      - name: Build framework and dependencies
         run: |
           export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
-          ./build_and_install.sh --clean --type RelWithDebInfo --jobs $(nproc)
+          ./build_and_install.sh --install --type RelWithDebInfo --jobs $(nproc)
 
       - name: Source environment
         run: |
           source build/setup_env.sh
           echo "PYTHONPATH=$PYTHONPATH" >> $GITHUB_ENV
-          echo "PYPTO_DIR=$PYPTO_DIR" >> $GITHUB_ENV
-          echo "SIMPLER_DIR=$SIMPLER_DIR" >> $GITHUB_ENV
+          echo "FRAMEWORK_ROOT=$FRAMEWORK_ROOT" >> $GITHUB_ENV
+          echo "PYPTO_ROOT=$PYPTO_ROOT" >> $GITHUB_ENV
+          echo "SIMPLER_ROOT=$SIMPLER_ROOT" >> $GITHUB_ENV
+
+      - name: Display build information
+        run: |
+          echo "=== Build Information ==="
+          echo "FRAMEWORK_ROOT: $FRAMEWORK_ROOT"
+          echo "PYPTO_ROOT: ${PYPTO_ROOT:-not set}"
+          echo "SIMPLER_ROOT: ${SIMPLER_ROOT:-not set}"
+          echo ""
+          echo "=== Dependency Status ==="
+          if [ -n "$PYPTO_ROOT" ] && [ -d "$PYPTO_ROOT" ]; then
+            echo "✓ PyPTO: $PYPTO_ROOT"
+            echo "  Build artifacts:"
+            find "$PYPTO_ROOT/python/pypto" -name "*.so" 2>/dev/null | head -n 1 || echo "  No .so files found"
+          else
+            echo "✗ PyPTO not found"
+          fi
+          
+          if [ -n "$SIMPLER_ROOT" ] && [ -d "$SIMPLER_ROOT" ]; then
+            echo "✓ Simpler: $SIMPLER_ROOT"
+          else
+            echo "✗ Simpler not found"
+          fi
 
       - name: Verify installation
         run: |
           python -c "import pypto; print(f'PyPTO version: {pypto.__version__}')"
           python -c "import pto_compiler; print('Simpler modules accessible')"
-          python -c "import pto_test; print('pto-test imported successfully')"
+          python -c "import pto_test; print(f'pto-test version: {pto_test.__version__}')"
+          python -c "from pto_test.core import environment; print('Environment module OK')"
 
       # - name: Run tests (simulation mode)
       #   run: |
@@ -138,6 +194,8 @@ jobs:
   lint:
     name: Code Quality Checks
     runs-on: ubuntu-22.04
+    # Only run on the original repository, not on forks
+    if: github.repository == 'luohuan19/PTOTestingFramework'
 
     steps:
       - name: Checkout repository
@@ -164,6 +222,8 @@ jobs:
   build-docs:
     name: Build Documentation
     runs-on: ubuntu-22.04
+    # Only run on the original repository, not on forks
+    if: github.repository == 'luohuan19/PTOTestingFramework'
 
     steps:
       - name: Checkout repository
